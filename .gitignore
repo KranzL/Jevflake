@@ -1,0 +1,15 @@
+target/
+dbt_packages/
+logs/
+.venv/
+.env
+.user.yml
+package-lock.yml
+__pycache__/
+.DS_Store
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log

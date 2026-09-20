@@ -1,0 +1,13 @@
+name: jevflake_integration_tests
+version: 0.1.0
+config-version: 2
+
+profile: jevflake_integration_tests
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  jevflake_schema: jevflake
+  jevflake_model: jev-1.13.0

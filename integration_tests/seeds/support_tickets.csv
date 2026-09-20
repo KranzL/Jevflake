@@ -1,0 +1,11 @@
+ticket_id,subject,body
+1,Charged twice,"I was charged twice for my March invoice. Please refund the extra payment."
+2,App crashes on login,"Every time I open the app on my phone it crashes right after the login screen."
+3,Change my email,"I need to update the email address on my account to my new work address."
+4,Payouts failing,"Help! My payouts have been failing for 3 days and I cannot pay my staff."
+5,Call me back,"Nobody has answered my emails. Call me at 555-0142 or write to dana@example.com."
+6,Feature idea,"It would be nice if the export page had a CSV option. No rush on this."
+7,Locked out,"I reset my password three times and I am still locked out of my account."
+8,Wrong plan,"I asked to be moved to the annual plan but I am still billed monthly."
+9,Slow dashboard,"The dashboard takes over a minute to load since the last update."
+10,Thanks,"Just wanted to say the new onboarding flow is great. Nothing needed."

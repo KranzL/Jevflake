@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: ticket_judgments
+    description: One row per ticket and question, holding the answer Jev gave.
+    data_tests:
+      - jevflake.no_errors
+      - jevflake.noul_between:
+          arguments:
+            question: has_contact_info
+            max_value: 0.2
+          config:
+            severity: warn
+      - jevflake.confidence_at_least:
+          arguments:
+            question: ticket_type
+            threshold: 0.5
+          config:
+            severity: warn
+
+  - name: tickets_flagged
+    description: Tickets with answers written straight into columns.
+    columns:
+      - name: ticket_id
+        data_tests:
+          - unique
+          - not_null
+
+  - name: ticket_review_queue
+    description: Answers that were errors, uncertain yes or no answers, or low confidence picks.
