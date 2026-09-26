@@ -17,6 +17,15 @@ models:
             threshold: 0.5
           config:
             severity: warn
+      - jevflake.score_between:
+          arguments:
+            question: urgency
+            min_value: 0
+            max_value: 2
+      - jevflake.choice_allowed:
+          arguments:
+            question: ticket_type
+            allowed: [billing, technical, account, other]
 
   - name: tickets_flagged
     description: Tickets with answers written straight into columns.

@@ -1,0 +1,1 @@
+(ANALYTICS.jevflake.jev_ask(to_variant(object_construct_keep_null('subject', subject, 'body', body)), parse_json('{"answer": {"criteria": {"a": "a", "b": "b"}, "instructions": "Which team", "type": "choice"}}')):answers:answer:choice::varchar)

@@ -50,10 +50,10 @@ Use your own database in place of `analytics`. By default the package looks in y
 ```yaml
 packages:
   - git: "https://github.com/KranzL/Jevflake.git"
-    revision: main
+    revision: v0.2.0
 ```
 
-Then run `dbt deps`.
+Then run `dbt deps`. Pin a tag rather than `main` so updates never change your SQL under you. Changes between versions are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ### 3. Create the network access and the functions
 
@@ -75,7 +75,13 @@ A role in `grant_to` can call the functions with only those grants, plus usage o
 grant usage on database analytics to role reporter;
 ```
 
-You can run setup again at any time, and you should after you change any setting below. Pass the same `grant_to` every time. Setup recreates the functions, and Snowflake drops the old grants when it does.
+You can run setup again at any time, and you should after you change any setting below. Setup recreates the functions, and Snowflake drops the old grants when it does, so setup reads back the roles that already had access and grants them again along with `grant_to`. Pass `preserve_grants: false` to grant exactly `grant_to` and nothing else. To verify who can use the functions afterwards:
+
+```bash
+dbt run-operation jevflake.check_grants --args '{grant_to: [transformer, reporter]}'
+```
+
+This fails if any listed role is missing access, and logs any other roles that have it.
 
 To see the SQL without running it:
 
@@ -83,7 +89,7 @@ To see the SQL without running it:
 dbt run-operation jevflake.setup --args '{dry_run: true}'
 ```
 
-Database, schema, role, and column names are used unquoted. Stick to plain identifiers made of letters, digits, and underscores.
+Database, schema, role, and column names are used unquoted. They must be plain identifiers made of letters, digits, and underscores, starting with a letter or underscore, and the package fails at compile time otherwise. The string and mapping forms of `state` are raw SQL expressions by design and are not checked.
 
 #### If your dbt role cannot create integrations
 
@@ -169,7 +175,7 @@ You will also see a function called `jev_ask_json` in the schema. It is the Pyth
 
 ### Store answers in a judgments model
 
-This is the recommended way. Answers are stored in a table, one row per key and question. A row is only sent to Jev again if its content changes, you change the questions, or you change `jevflake_model`.
+This is the recommended way. Answers are stored in a table, one row per key and question. A row is only sent to Jev again if its content changes, one of its questions changes, or you change `jevflake_model`. New or changed rows are asked every question at once; rows that are otherwise up to date are only re-asked the questions that changed.
 
 ```sql
 {{ config(
@@ -208,13 +214,14 @@ Arguments:
 - `state` is what Jev gets to read. It can be one SQL expression, a list of columns, or a mapping of labels to SQL expressions. Send only the columns the questions need. TypeSafe's docs say unrelated content lowers accuracy, and in testing the same question gave noticeably different probabilities with and without an extra column.
 - `questions` is a mapping of names to questions. All of them go out in one API call per row.
 
-Columns in the result: your key columns, `question`, `answer_type`, `noul`, `choice`, `score`, `confidence`, `probabilities`, `error`, `answer`, `model`, `state_hash`, `questions_hash`, `judged_at`.
+Columns in the result: your key columns, `question`, `answer_type`, `noul`, `choice`, `score`, `confidence`, `probabilities`, `error`, `answer`, `model`, `state_hash`, `question_hash`, `questions_hash`, `judged_at`. `question_hash` covers one question plus the model name and is what decides whether that question is asked again. `questions_hash` covers the whole question set and is kept for backwards compatibility.
 
 Things to know about what gets stored:
 
-- If you change any question, every row is asked again on the next run.
-- If you remove or rename a question, its old rows stay until you run the model with `--full-refresh`. The same goes for rows that are deleted from the source.
-- Rows with a null key are skipped. When `state` is a single SQL expression and it is null, the row is skipped too. Skipped rows are never sent to Jev and leave no row in the result. When `state` is a list of columns or a mapping, the row is always sent, even if every column is null.
+- If you change one question, every row is asked that question again on the next run, and only that question. Unchanged questions keep their stored answers.
+- If you remove or rename a question, its old rows stay until you prune them (see below) or run the model with `--full-refresh`. The same goes for rows that are deleted from the source.
+- Tables built before `question_hash` existed are picked up without a re-ask: rows whose stored `questions_hash` still matches are treated as up to date.
+- Rows with a null key are skipped, and so are rows where the whole state is null: a null expression, or a list or mapping where every column or expression is null. Skipped rows are never sent to Jev and leave no row in the result.
 - The `model` column holds the versioned model ID the API reports, falling back to your configured `jevflake_model`.
 
 ### Put an answer straight into a column
@@ -240,6 +247,16 @@ Some answers should go to a person. This macro selects errors, yes or no answers
 {{ jevflake.review_queue(ref('ticket_judgments'), noul_low=0.2, noul_high=0.8, min_confidence=0.5) }}
 ```
 
+### Prune removed questions and deleted rows
+
+When you remove or rename a question, or rows disappear from the source, the old judgment rows stay until you delete them. This removes both in one step:
+
+```bash
+dbt run-operation jevflake.prune_orphans --args '{judgments: ANALYTICS.PUBLIC.ticket_judgments, relation: ANALYTICS.PUBLIC.stg_support_tickets, key: ticket_id, questions: [ticket_type, urgency, has_contact_info]}'
+```
+
+`judgments` is the judgments table, `relation` is the source it was built from, `key` is the key column or columns, and `questions` is the current question names, or the full questions mapping. Pass `dry_run: true` to print the deletes without running them. Nothing is sent to Jev, so pruning costs nothing but warehouse time.
+
 ### Tests
 
 These run on a judgments model. They read stored answers, so running tests costs nothing.
@@ -263,7 +280,10 @@ models:
 
 - `no_errors` fails on rows Jev rejected, for example text that is too long.
 - `noul_between` fails when a yes or no probability is outside `min_value` and `max_value`. They default to 0 and 1.
+- `score_between` fails when a score is outside `min_value` and `max_value`. `min_value` defaults to 0; `max_value` is required and is the number of levels minus one.
+- `choice_allowed` fails when a choice is not in `allowed`. Leave out `question` to check every choice in the model.
 - `confidence_at_least` fails when a choice or score has confidence below `threshold`. Leave out `question` to check every choice and score in the model.
+- `judgment_drift` fails when answers moved since a baseline run: give it the baseline table name, the key columns, the question, and a `tolerance` for noul and score probabilities (default 0.05). Choice answers fail on any change, and any answer type change fails. Snapshot the judgments table before a question or model change, then point `baseline` at the snapshot.
 
 The `arguments` key needs dbt 1.10.5 or newer. On older versions, put the test arguments directly under the test name.
 
@@ -276,7 +296,7 @@ Set these as `vars` in your `dbt_project.yml`. Run `jevflake.setup` again after 
 - `jevflake_secret`: full name of the secret. Default `<database>.<schema>.jev_api_key`.
 - `jevflake_integration`: default `jev_access`. Integrations are account level, so the name must be unique in the account.
 - `jevflake_network_rule`: default `jev_egress`.
-- `jevflake_model`: default `jev-1.13.0`. It is pinned so answers do not shift under you. The model name is part of the cache key, so changing it asks every row again.
+- `jevflake_model`: default `jev-1.13.0`. It is pinned so answers do not shift under you. The model name is part of every cache key, so changing it asks every row every question again on the next run. Snapshot the judgments table first if you want to compare: `judgment_drift` will tell you what moved.
 - `jevflake_concurrency`: API calls in flight per batch. Default `8`. Snowflake can run several batches at once, so the total can be higher.
 - `jevflake_max_batch_size`: the most rows Snowflake hands the function at once. Default `64`.
 - `jevflake_max_retries`: default `6`.
@@ -290,6 +310,14 @@ By default each row is its own API call. At the time of writing TypeSafe allows 
 
 Setting `jevflake_rows_per_request` higher packs several rows into one call. It is faster. It is also experimental: rows in the same call can influence each other, and Jev's own docs say unrelated content lowers accuracy. In a direct API test with three rows, the packed answers were within 0.01 of the single row answers and used about half the tokens. That is a tiny sample, and the packed path has not been run inside Snowflake. Compare answers on a sample of your own data before you trust it.
 
+To compare, build the same judgments model twice on a sample, once with each setting, then run:
+
+```sql
+{{ jevflake.packing_drift(ref('ticket_judgments_single'), ref('ticket_judgments_packed'), 'ticket_id') }}
+```
+
+This reports per question the mean and max absolute drift for noul and score answers, plus choice and answer type mismatches. Small drift on your own sample is the signal that packing is safe for that question set.
+
 ## Costs and limits
 
 - Jev costs $0.042 per million input tokens. Output is free. Every call carries fixed overhead: in testing, one sentence of text with one short question used about 290 input tokens. A short support ticket with three questions came to about 470 input tokens, which works out to roughly $20 per million rows.
@@ -298,6 +326,34 @@ Setting `jevflake_rows_per_request` higher packs several rows into one call. It 
 - Snowflake gives the function 180 seconds per batch of rows. If heavy rate limiting pushes a batch past that, the query fails. Lower `jevflake_max_batch_size` if you see it.
 - Busy or rate limited calls are retried with backoff. If retries run out, the query fails. A bad API key fails the query right away.
 - Rows that Jev rejects do not fail the query. In a judgments model they come back with `answer_type = 'error'` and the reason in `error`. In plain SQL, `jev_noul` returns null for them, and `jev_choice`, `jev_score`, and `jev_ask` return an answer with `type` set to `error`.
+
+### Estimate before you judge
+
+This reads your source table and estimates tokens and dollars for one full pass, using your real state sizes. It sends nothing to Jev.
+
+```sql
+{{ jevflake.estimate_cost(ref('stg_support_tickets'), ['subject', 'body'], {'ticket_type': jevflake.choice_question('Which team', ['billing', 'technical'])}, key='ticket_id') }}
+```
+
+The estimate assumes four characters per token plus a fixed overhead per call. Both are parameters, along with the price, so recalibrate them against your first bill.
+
+### Tune the throughput
+
+Two settings control speed: `jevflake_concurrency` is API calls in flight per batch, and `jevflake_max_batch_size` is rows per batch. With the defaults of 8 and 64, one batch makes up to 64 calls, 8 at a time. Snowflake runs several batches in parallel, so the real call rate is higher than one batch suggests.
+
+- The binding constraint is usually TypeSafe's rate limit, currently 1,200 calls per minute, or about 72,000 rows per hour at one row per call. Raising concurrency past what the limit allows only buys retries.
+- If batches time out after 180 seconds under rate limiting, lower `jevflake_max_batch_size` so each batch has less work to finish, and consider lowering `jevflake_concurrency` to smooth the call rate.
+- If you are well under the rate limit and the warehouse is idle between calls, raise `jevflake_concurrency` first. Run `jevflake.setup` again after changing either setting.
+
+### Check a run afterwards
+
+This summarizes a judgments table by question and answer type, with mean confidence and the judged range:
+
+```sql
+{{ jevflake.judgment_run_stats(ref('ticket_judgments')) }}
+```
+
+Errors show up as `answer_type = 'error'` rows. For the uncertain middle and low confidence picks, see `review_queue` above.
 
 ## What Jev is bad at
 
@@ -333,17 +389,21 @@ This sends the ten tickets to Jev, which costs a fraction of a cent. Two of the 
 
 ## Development
 
-The offline checks need no packages and no Snowflake account:
+The offline checks need no Snowflake account:
 
 ```bash
-python3 -m unittest discover -s tests
+python3 -m venv .venv
+.venv/bin/pip install jinja2
+.venv/bin/python -m unittest discover -s tests
 ```
 
-They cover the Python handler, and they check that the Terraform copy of the handler matches the dbt macro. After changing `macros/setup/handler.sql`, run `python3 scripts/sync_terraform_handler.py`.
+They cover the Python handler, render every macro and generic test against snapshots in `tests/snapshots`, and check that the Terraform copy of the handler matches the dbt macro. Without `jinja2` the render tests skip and the rest still runs with no packages. After changing a macro, regenerate snapshots with `UPDATE_SNAPSHOTS=1` and review the diff before committing. After changing `macros/setup/handler.sql`, run `python3 scripts/sync_terraform_handler.py`.
+
+CI runs the same checks on Python 3.10 through 3.12, plus `dbt parse` and `dbt compile` of the example project on dbt 1.10 and 1.12, and Terraform validate on every example.
 
 ## Status
 
-Version 0.1. It has been run against one live Snowflake account with a real Jev key, on dbt 1.12.5 with dbt-snowflake 1.12.1.
+Version 0.2. It has been run against one live Snowflake account with a real Jev key, on dbt 1.12.5 with dbt-snowflake 1.12.1.
 
 What was run: setup, the split setup with a separate admin role, function builder role, and caller role, teardown, every SQL function, the example project with its tests, a second run that sent no rows back to Jev, a run after editing one ticket that sent only that ticket, and the Terraform module.
 

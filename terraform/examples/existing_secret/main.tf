@@ -31,20 +31,19 @@ variable "integration_name" {
   default = "JEV_ACCESS"
 }
 
-variable "typesafe_api_key" {
-  type      = string
-  default   = null
-  sensitive = true
-}
-
 variable "existing_secret" {
-  type    = string
-  default = null
+  type        = string
+  description = "Full name of the secret that already holds the TypeSafe API key."
 }
 
 variable "caller_roles" {
   type    = list(string)
   default = []
+}
+
+variable "model" {
+  type    = string
+  default = "jev-1.13.0"
 }
 
 module "jevflake" {
@@ -53,13 +52,17 @@ module "jevflake" {
   database         = var.database
   schema           = var.schema
   integration_name = var.integration_name
-  api_key          = var.typesafe_api_key
   existing_secret  = var.existing_secret
   caller_roles     = var.caller_roles
+  model            = var.model
 }
 
 output "functions" {
   value = module.jevflake.functions
+}
+
+output "function_signatures" {
+  value = module.jevflake.function_signatures
 }
 
 output "dbt_vars" {

@@ -36,7 +36,7 @@ The role Terraform connects with must be able to create integrations. By default
 
 ```hcl
 module "jevflake" {
-  source = "github.com/KranzL/Jevflake//terraform?ref=main"
+  source = "github.com/KranzL/Jevflake//terraform?ref=v0.2.0"
 
   database        = "ANALYTICS"
   existing_secret = "ANALYTICS.SECRETS.JEV_API_KEY"
@@ -44,7 +44,7 @@ module "jevflake" {
 }
 ```
 
-There is a complete root configuration in [`examples/basic`](examples/basic/main.tf).
+There are complete root configurations in [`examples/basic`](examples/basic/main.tf) and [`examples/existing_secret`](examples/existing_secret/main.tf). The second one is the recommended shape: the secret already exists and the key never enters Terraform.
 
 ## The API key
 
@@ -85,6 +85,8 @@ All names are turned into upper case. The dbt macros use unquoted names, which S
 
 - `database` and `schema`: where the functions live
 - `functions`: full names of the functions you call
+- `function_signatures`: full signatures of every overload
+- `model`: the model the functions send, for the dbt var of the same name
 - `integration_name`, `network_rule`, `secret`
 
 ## Using it with the dbt package

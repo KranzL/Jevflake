@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install jinja2
+      - run: python3 -m unittest discover -s tests
+      - run: python3 -S -m unittest discover -s tests
+      - run: python3 scripts/sync_terraform_handler.py --check
+
+  dbt-parse:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dbt-version: ["1.10.*", "1.12.*"]
+    env:
+      SNOWFLAKE_ACCOUNT: ci_account
+      SNOWFLAKE_USER: ci_user
+      SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/ci_key.p8
+      SNOWFLAKE_ROLE: ci_role
+      SNOWFLAKE_WAREHOUSE: ci_warehouse
+      SNOWFLAKE_DATABASE: ci_db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install "dbt-snowflake==${{ matrix.dbt-version }}"
+      - run: dbt deps --profiles-dir .
+        working-directory: integration_tests
+      - run: dbt parse --profiles-dir .
+        working-directory: integration_tests
+      - run: dbt compile --profiles-dir .
+        working-directory: integration_tests
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+      - run: terraform fmt -check -recursive
+      - run: |
+          for example in terraform/examples/*/; do
+            terraform -chdir="$example" init -backend=false -input=false
+            terraform -chdir="$example" validate
+          done

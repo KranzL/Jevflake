@@ -1,10 +1,10 @@
 {% macro database_name() %}
-  {{ return(var('jevflake_database', target.database)) }}
+  {{ return(jevflake.assert_identifier(var('jevflake_database', target.database), 'database')) }}
 {% endmacro %}
 
 
 {% macro schema_name() %}
-  {{ return(var('jevflake_schema', 'jevflake')) }}
+  {{ return(jevflake.assert_identifier(var('jevflake_schema', 'jevflake'), 'schema')) }}
 {% endmacro %}
 
 
@@ -19,17 +19,17 @@
 
 
 {% macro secret_name() %}
-  {{ return(var('jevflake_secret', jevflake.namespace() ~ '.jev_api_key')) }}
+  {{ return(jevflake.assert_dotted_name(var('jevflake_secret', jevflake.namespace() ~ '.jev_api_key'), 'secret')) }}
 {% endmacro %}
 
 
 {% macro network_rule_name() %}
-  {{ return(jevflake.namespace() ~ '.' ~ var('jevflake_network_rule', 'jev_egress')) }}
+  {{ return(jevflake.namespace() ~ '.' ~ jevflake.assert_identifier(var('jevflake_network_rule', 'jev_egress'), 'network rule')) }}
 {% endmacro %}
 
 
 {% macro integration_name() %}
-  {{ return(var('jevflake_integration', 'jev_access')) }}
+  {{ return(jevflake.assert_identifier(var('jevflake_integration', 'jev_access'), 'integration')) }}
 {% endmacro %}
 
 
