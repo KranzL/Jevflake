@@ -36,7 +36,7 @@ The role Terraform connects with must be able to create integrations. By default
 
 ```hcl
 module "jevflake" {
-  source = "github.com/KranzL/Jevflake//terraform?ref=v0.2.0"
+  source = "github.com/KranzL/Jevflake//terraform?ref=v0.1"
 
   database        = "ANALYTICS"
   existing_secret = "ANALYTICS.SECRETS.JEV_API_KEY"

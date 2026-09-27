@@ -50,7 +50,7 @@ Use your own database in place of `analytics`. By default the package looks in y
 ```yaml
 packages:
   - git: "https://github.com/KranzL/Jevflake.git"
-    revision: v0.2.0
+    revision: v0.1
 ```
 
 Then run `dbt deps`. Pin a tag rather than `main` so updates never change your SQL under you. Changes between versions are listed in [CHANGELOG.md](CHANGELOG.md).
@@ -403,7 +403,7 @@ CI runs the same checks on Python 3.10 through 3.12, plus `dbt parse` of the exa
 
 ## Status
 
-Version 0.2. It has been run against one live Snowflake account with a real Jev key, on dbt 1.12.5 with dbt-snowflake 1.12.1.
+Version 0.1. It has been run against one live Snowflake account with a real Jev key, on dbt 1.12.5 with dbt-snowflake 1.12.1.
 
 What was run: setup, the split setup with a separate admin role, function builder role, and caller role, teardown, every SQL function, the example project with its tests, a second run that sent no rows back to Jev, a run after editing one ticket that sent only that ticket, and the Terraform module.
 
