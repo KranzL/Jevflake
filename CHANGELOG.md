@@ -53,9 +53,9 @@ Verification:
   globals and compare against snapshots in `tests/snapshots`. They need
   `jinja2`, which CI installs; without it they skip and the remaining checks
   still run with no packages.
-- CI runs the unit tests on Python 3.10 through 3.12, `dbt parse` and
-  `dbt compile` on dbt 1.10 and 1.12, and Terraform validate on every
-  example.
+- CI runs the unit tests on Python 3.10 through 3.12, `dbt parse` on
+  dbt 1.10 and 1.12, an offline `dbt compile` through dbt 1.10 with a
+  duckdb profile, and Terraform validate on every example.
 
 ## 0.1.0
 

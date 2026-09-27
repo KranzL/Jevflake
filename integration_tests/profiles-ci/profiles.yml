@@ -1,0 +1,8 @@
+jevflake_integration_tests:
+  target: ci
+  outputs:
+    ci:
+      type: duckdb
+      path: ":memory:"
+      schema: jevflake_tests
+      threads: 4

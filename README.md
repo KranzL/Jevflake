@@ -399,7 +399,7 @@ python3 -m venv .venv
 
 They cover the Python handler, render every macro and generic test against snapshots in `tests/snapshots`, and check that the Terraform copy of the handler matches the dbt macro. Without `jinja2` the render tests skip and the rest still runs with no packages. After changing a macro, regenerate snapshots with `UPDATE_SNAPSHOTS=1` and review the diff before committing. After changing `macros/setup/handler.sql`, run `python3 scripts/sync_terraform_handler.py`.
 
-CI runs the same checks on Python 3.10 through 3.12, plus `dbt parse` and `dbt compile` of the example project on dbt 1.10 and 1.12, and Terraform validate on every example.
+CI runs the same checks on Python 3.10 through 3.12, plus `dbt parse` of the example project on dbt 1.10 and 1.12, an offline `dbt compile` through real dbt 1.10 using a duckdb profile, and Terraform validate on every example. The Snowflake adapter always opens a connection during compile, so compile runs against duckdb: it verifies the Jinja rendering, not the SQL dialect.
 
 ## Status
 
